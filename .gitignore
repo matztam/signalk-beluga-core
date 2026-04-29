@@ -1,0 +1,8 @@
+node_modules/
+.venv/
+*.log
+.env
+npm-debug.log*
+mock_inject.js
+
+notes.md
