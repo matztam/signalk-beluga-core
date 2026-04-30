@@ -1,14 +1,27 @@
 {
   "name": "signalk-beluga-core",
   "version": "0.1.0",
-  "description": "ORCA Core emulator for SignalK — BLE advertisement, mDNS, REST API and WebSocket sensor stream compatible with the ORCA app (com.theorca.slate)",
+  "description": "ORCA Core emulator for SignalK — BLE advertisement, mDNS, REST API and WebSocket sensor stream compatible with the ORCA app",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "lib/",
+    "ble_beacon.py",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-category-hardware",
     "signalk-category-ais",
     "orca"
   ],
+  "author": "matztam",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/matztam/signalk-beluga-core.git"
+  },
+  "homepage": "https://github.com/matztam/signalk-beluga-core",
   "signalk-plugin-enabled-by-default": false,
   "license": "AGPL-3.0-only",
   "engines": {
