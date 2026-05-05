@@ -42,14 +42,16 @@ module.exports = function (app) {
 
   const SCHEMA_PROPS = {
     deviceId: {
-      type:    'string',
-      title:   'Device ID (6 alphanumeric characters) — leave empty to auto-generate a unique ID on first start',
-      pattern: '^[a-zA-Z0-9]{6}$'
+      type:        'string',
+      title:       'Device ID (6 alphanumeric characters)',
+      description: 'The device appears in the ORCA app as orca-<deviceId>. Auto-generated on first start. Changing the ID requires re-pairing the app.',
+      pattern:     '^[a-zA-Z0-9]{6}$'
     },
     wifiSsid: {
-      type:    'string',
-      title:   "WiFi SSID (must match the phone's current WiFi network)",
-      default: ''
+      type:        'string',
+      title:       'WiFi SSID',
+      description: 'Must match the WiFi network the phone is connected to. Included in the BLE advertisement so the app knows which network to use after pairing. Not needed in Direct-AP mode.',
+      default:     ''
     },
     firmwareVersion: {
       type:    'string',
@@ -61,20 +63,27 @@ module.exports = function (app) {
       title:   'Model name',
       default: 'ORCA Core'
     },
+    _bleHeader: {
+      type:  'null',
+      title: 'Bluetooth'
+    },
     enableBle: {
-      type:    'boolean',
-      title:   'Enable BLE advertisement (requires BlueZ on Linux)',
-      default: true
+      type:        'boolean',
+      title:       'Enable BLE advertisement',
+      description: 'BLE is required for initial pairing — once the app recognises the device it connects via mDNS/REST/WebSocket and Bluetooth is no longer needed. Requires BlueZ and Python 3. Alternative without BLE: Direct-AP mode — connect the phone to a WiFi network with SSID matching orca-XXXXXX and assign the SignalK host the IP 10.11.12.1.',
+      default:     true
     },
     deltaIntervalMs: {
-      type:    'number',
-      title:   'Default send interval (ms) — used when the ORCA app does not request a specific rate via ?interval=',
-      default: 1000
+      type:        'number',
+      title:       'Default WebSocket send interval (ms)',
+      description: 'How often sensor data is pushed to the app. The app may request a different rate via ?interval= — see "Ignore app interval" below.',
+      default:     1000
     },
     ignoreAppInterval: {
-      type:    'boolean',
-      title:   'Ignore the interval requested by the app — send every SignalK update immediately',
-      default: false
+      type:        'boolean',
+      title:       'Ignore the interval requested by the app',
+      description: 'When enabled, every incoming SignalK delta is forwarded immediately, ignoring the ?interval= parameter. Useful for testing; may increase CPU usage.',
+      default:     false
     }
   }
 
@@ -93,11 +102,16 @@ module.exports = function (app) {
   }
 
   plugin.uiSchema = function () {
-    if (!statusText) return {}
-    const alertClass = statusText.startsWith('⛔') ? 'alert alert-danger'
-      : statusText.includes('⚠')                  ? 'alert alert-warning'
-      :                                              'alert alert-success'
-    return { _status: { 'ui:classNames': alertClass + ' p-2 mb-2' } }
+    const ui = {
+      _bleHeader: { 'ui:classNames': 'mt-4' }
+    }
+    if (statusText) {
+      const alertClass = statusText.startsWith('⛔') ? 'alert alert-danger'
+        : statusText.includes('⚠')                  ? 'alert alert-warning'
+        :                                              'alert alert-success'
+      ui._status = { 'ui:classNames': alertClass + ' p-2 mb-2' }
+    }
+    return ui
   }
 
   plugin.start = function (options) {
