@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message RadarMessage {
+  message Spoke {
+    uint32 angle    = 1;
+    optional uint32 bearing = 2;
+    uint32 range    = 3;
+    optional uint64 time    = 4;
+    bytes  data     = 5;
+    optional double lat     = 6;
+    optional double lon     = 7;
+  }
+  repeated Spoke spokes = 2;
+}
