@@ -1,10 +1,11 @@
 'use strict'
 
 const { spawnSync } = require('child_process')
-const Ble  = require('./lib/ble')
-const Api  = require('./lib/api')
-const Ws   = require('./lib/websocket')
-const Mdns = require('./lib/mdns')
+const Ble   = require('./lib/ble')
+const Api   = require('./lib/api')
+const Ws    = require('./lib/websocket')
+const Mdns  = require('./lib/mdns')
+const Radar = require('./lib/radar')
 
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 const ID_RE    = /^[a-zA-Z0-9]{6}$/
@@ -37,7 +38,7 @@ module.exports = function (app) {
     description: 'Emulates an ORCA Core device: BLE advertisement, mDNS, REST API (port 8088), WebSocket sensor stream (port 8089).'
   }
 
-  let ble, api, wsServer, mdns
+  let ble, api, wsServer, mdns, radar
   let statusText = ''
 
   const SCHEMA_PROPS = {
@@ -84,6 +85,22 @@ module.exports = function (app) {
       title:       'Ignore the interval requested by the app',
       description: 'When enabled, every incoming SignalK delta is forwarded immediately, ignoring the ?interval= parameter. Useful for testing; may increase CPU usage.',
       default:     false
+    },
+    _radarHeader: {
+      type:  'null',
+      title: 'Radar (mayara)'
+    },
+    mayaraHost: {
+      type:        'string',
+      title:       'mayara-server host',
+      description: 'Hostname or IP of the mayara-server instance. Use localhost when mayara runs on the same machine.',
+      default:     'localhost'
+    },
+    mayaraPort: {
+      type:        'number',
+      title:       'mayara-server port',
+      description: 'Port of the mayara-server REST/WebSocket API.',
+      default:     6502
     }
   }
 
@@ -103,7 +120,8 @@ module.exports = function (app) {
 
   plugin.uiSchema = function () {
     const ui = {
-      _bleHeader: { 'ui:classNames': 'mt-4' }
+      _bleHeader:   { 'ui:classNames': 'mt-4' },
+      _radarHeader: { 'ui:classNames': 'mt-4' },
     }
     if (statusText) {
       const alertClass = statusText.startsWith('⛔') ? 'alert alert-danger'
@@ -115,7 +133,7 @@ module.exports = function (app) {
   }
 
   plugin.start = function (options) {
-    const busy = busyPorts([8080, 8088, 8089])
+    const busy = busyPorts([8080, 8088, 8089, 9081, 9089])
     if (busy.length > 0) {
       const msg = `Port${busy.length > 1 ? 's' : ''} already in use: ${busy.join(', ')} — stop the conflicting service and restart the plugin`
       statusText = `⛔ ${msg}`
@@ -140,7 +158,9 @@ module.exports = function (app) {
     const deltaIntervalMs = options.deltaIntervalMs || 1000
 
     const ignoreAppInterval = options.ignoreAppInterval === true
-    const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval }
+    const mayaraHost = options.mayaraHost || 'localhost'
+    const mayaraPort = options.mayaraPort || 6502
+    const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort }
 
     let wantBle   = options.enableBle !== false
     let bleWarning = ''
@@ -155,6 +175,7 @@ module.exports = function (app) {
     mdns     = new Mdns(ctx)
     api      = new Api(ctx)
     wsServer = new Ws(ctx)
+    radar    = new Radar(ctx)
     ble      = wantBle ? new Ble(ctx) : null
 
     app.debug('autopilotApi defaultProviderId=%s defaultDeviceId=%s devices=%s',
@@ -166,6 +187,7 @@ module.exports = function (app) {
     mdns.start()
     api.start()
     wsServer.start()
+    radar.start()
 
     let bleStatus = ''
     if (ble) {
@@ -173,13 +195,18 @@ module.exports = function (app) {
       bleStatus = ' + BLE'
     }
 
-    const runMsg = `Running — ${deviceName} | UI :8080 | REST :8088 | WS :8089 | mDNS${bleStatus}`
-    statusText = `✅ ${runMsg}${bleWarning}`
+    const hasRadar    = !!app.radarApi
+    const restPorts   = hasRadar ? ':8088/:9081' : ':8088'
+    const wsPorts     = hasRadar ? ':8089/:9089' : ':8089'
+    const radarWarning = hasRadar ? '' : ' ⚠ no radar (mayara not installed)'
+    const runMsg = `Running — ${deviceName} | UI :8080 | REST ${restPorts} | WS ${wsPorts} | mDNS${bleStatus}`
+    statusText = `✅ ${runMsg}${bleWarning}${radarWarning}`
     app.setPluginStatus(runMsg)
   }
 
   plugin.stop = function () {
     if (ble)      { ble.stop();      ble      = null }
+    if (radar)    { radar.stop();    radar    = null }
     if (wsServer) { wsServer.stop(); wsServer = null }
     if (api)      { api.stop();      api      = null }
     if (mdns)     { mdns.stop();     mdns     = null }

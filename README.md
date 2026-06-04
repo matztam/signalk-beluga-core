@@ -12,8 +12,16 @@ It makes the ORCA app (`com.theorca.slate`) connect to your SignalK server.
 | REST API | 8088 | Handles all ORCA app HTTP endpoints (`/v1/devices`, `/v1/sources`, `/v1/nmea2000/status`, …) |
 | UI stub | 8080 | Responds to `/info` so the app skips its boot delay |
 | WebSocket | 8089 | Streams sensor deltas (`/v1/sensors/delta`) and AIS deltas (`?ns=ais`) to the app |
+| Radar REST | 9081 | Handles `/v1/radars` and radar command/status endpoints _(only when mayara is installed)_ |
+| Radar WebSocket | 9089 | Streams radar spoke frames (`/v1/spokes/:id/delta`) to the app _(only when mayara is installed)_ |
 
 SignalK paths are read from the running server via `app.getSelfPath()` and translated into the flat key format the ORCA app expects.
+
+## Radar support
+
+Radar data is forwarded from the [mayara](https://github.com/keesverruijt/mayara) radar plugin (`@marineyachtradar/signalk-plugin`). When mayara is installed in the same SignalK server, beluga-core discovers the available radars automatically via SignalK's `app.radarApi` interface and opens a spoke stream for each radar. Spokes are re-encoded and sent to the ORCA app in real time.
+
+No additional configuration is needed. If mayara is not installed, the radar ports are not opened and the plugin status page shows a corresponding notice. If mayara is installed but no radar is transmitting yet, discovery is retried every 15 seconds.
 
 ## Requirements
 
