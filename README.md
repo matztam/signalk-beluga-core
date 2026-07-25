@@ -1,6 +1,6 @@
 # signalk-beluga-core
 
-A [SignalK](https://signalk.org/) plugin that emulates an [ORCA Core](https://www.theorca.com/) marine sensor hub.
+A [SignalK](https://signalk.org/) plugin that emulates an ORCA Core marine sensor hub.
 It makes the ORCA app (`com.theorca.slate`) connect to your SignalK server.
 
 ## What it does
