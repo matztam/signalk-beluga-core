@@ -93,8 +93,8 @@ module.exports = function (app) {
     mayaraHost: {
       type:        'string',
       title:       'mayara-server host',
-      description: 'Hostname or IP of the mayara-server instance. Use localhost when mayara runs on the same machine.',
-      default:     'localhost'
+      description: 'Hostname or IP of the mayara-server instance. Leave empty to disable radar support.',
+      default:     ''
     },
     mayaraPort: {
       type:        'number',
@@ -133,7 +133,11 @@ module.exports = function (app) {
   }
 
   plugin.start = function (options) {
-    const busy = busyPorts([8080, 8088, 8089, 9081, 9089])
+    const mayaraHost = options.mayaraHost || ''
+    const mayaraPort = options.mayaraPort || 6502
+    const wantRadar  = !!mayaraHost
+
+    const busy = busyPorts([8080, 8088, 8089, ...(wantRadar ? [9081, 9089] : [])])
     if (busy.length > 0) {
       const msg = `Port${busy.length > 1 ? 's' : ''} already in use: ${busy.join(', ')} — stop the conflicting service and restart the plugin`
       statusText = `⛔ ${msg}`
@@ -158,8 +162,6 @@ module.exports = function (app) {
     const deltaIntervalMs = options.deltaIntervalMs || 1000
 
     const ignoreAppInterval = options.ignoreAppInterval === true
-    const mayaraHost = options.mayaraHost || 'localhost'
-    const mayaraPort = options.mayaraPort || 6502
     const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort }
 
     let wantBle   = options.enableBle !== false
@@ -175,7 +177,7 @@ module.exports = function (app) {
     mdns     = new Mdns(ctx)
     api      = new Api(ctx)
     wsServer = new Ws(ctx)
-    radar    = new Radar(ctx)
+    radar    = wantRadar ? new Radar(ctx) : null
     ble      = wantBle ? new Ble(ctx) : null
 
     app.debug('autopilotApi defaultProviderId=%s defaultDeviceId=%s devices=%s',
@@ -187,7 +189,7 @@ module.exports = function (app) {
     mdns.start()
     api.start()
     wsServer.start()
-    radar.start()
+    if (radar) radar.start()
 
     let bleStatus = ''
     if (ble) {
@@ -195,10 +197,9 @@ module.exports = function (app) {
       bleStatus = ' + BLE'
     }
 
-    const hasRadar    = !!app.radarApi
-    const restPorts   = hasRadar ? ':8088/:9081' : ':8088'
-    const wsPorts     = hasRadar ? ':8089/:9089' : ':8089'
-    const radarWarning = hasRadar ? '' : ' ⚠ no radar (mayara not installed)'
+    const restPorts    = wantRadar ? ':8088/:9081' : ':8088'
+    const wsPorts      = wantRadar ? ':8089/:9089' : ':8089'
+    const radarWarning = wantRadar ? '' : ' ⚠ no radar (mayara host not configured)'
     const runMsg = `Running — ${deviceName} | UI :8080 | REST ${restPorts} | WS ${wsPorts} | mDNS${bleStatus}`
     statusText = `✅ ${runMsg}${bleWarning}${radarWarning}`
     app.setPluginStatus(runMsg)
