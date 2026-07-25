@@ -19,7 +19,7 @@ SignalK paths are read from the running server via `app.getSelfPath()` and trans
 
 ## Radar support
 
-Radar data is forwarded from a [mayara-server](https://github.com/keesverruijt/mayara) instance. Configure the mayara-server host and port in the plugin settings to enable radar. beluga-core connects directly to mayara's REST and WebSocket API — no mayara SignalK plugin required. Spokes are re-encoded and sent to the ORCA app once per antenna revolution. If no mayara host is configured, the radar ports are not opened. Discovery is retried every 15 seconds if the radar is not yet transmitting.
+Radar data is forwarded from a [mayara-server](https://github.com/MarineYachtRadar/mayara-server) instance. Configure the mayara-server host and port in the plugin settings to enable radar. beluga-core connects directly to mayara's REST and WebSocket API — no mayara SignalK plugin required. Spokes are re-encoded and sent to the ORCA app once per antenna revolution. If no mayara host is configured, the radar ports are not opened. Discovery is retried every 15 seconds if the radar is not yet transmitting.
 
 ## Requirements
 
