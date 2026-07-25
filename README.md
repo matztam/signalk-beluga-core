@@ -12,20 +12,19 @@ It makes the ORCA app (`com.theorca.slate`) connect to your SignalK server.
 | REST API | 8088 | Handles all ORCA app HTTP endpoints (`/v1/devices`, `/v1/sources`, `/v1/nmea2000/status`, …) |
 | UI stub | 8080 | Responds to `/info` so the app skips its boot delay |
 | WebSocket | 8089 | Streams sensor deltas (`/v1/sensors/delta`) and AIS deltas (`?ns=ais`) to the app |
-| Radar REST | 9081 | Handles `/v1/radars` and radar command/status endpoints _(only when mayara is installed)_ |
-| Radar WebSocket | 9089 | Streams radar spoke frames (`/v1/spokes/:id/delta`) to the app _(only when mayara is installed)_ |
+| Radar REST | 9081 | Handles `/v1/radars` and radar command/status endpoints _(only when mayara host is configured)_ |
+| Radar WebSocket | 9089 | Streams radar spoke frames (`/v1/spokes/:id/delta`) to the app _(only when mayara host is configured)_ |
 
 SignalK paths are read from the running server via `app.getSelfPath()` and translated into the flat key format the ORCA app expects.
 
 ## Radar support
 
-Radar data is forwarded from the [mayara](https://github.com/keesverruijt/mayara) radar plugin (`@marineyachtradar/signalk-plugin`). When mayara is installed in the same SignalK server, beluga-core discovers the available radars automatically via SignalK's `app.radarApi` interface and opens a spoke stream for each radar. Spokes are re-encoded and sent to the ORCA app in real time.
-
-No additional configuration is needed. If mayara is not installed, the radar ports are not opened and the plugin status page shows a corresponding notice. If mayara is installed but no radar is transmitting yet, discovery is retried every 15 seconds.
+Radar data is forwarded from a [mayara-server](https://github.com/keesverruijt/mayara) instance. Configure the mayara-server host and port in the plugin settings to enable radar. beluga-core connects directly to mayara's REST and WebSocket API — no mayara SignalK plugin required. Spokes are re-encoded and sent to the ORCA app once per antenna revolution. If no mayara host is configured, the radar ports are not opened. Discovery is retried every 15 seconds if the radar is not yet transmitting.
 
 ## Requirements
 
 - **Linux with BlueZ** — required for BLE pairing (standard path); not needed when using Direct-AP mode
+- **mayara-server** — required only for radar support; must be reachable from the SignalK host over HTTP/WebSocket
 - **Python 3** (`python3` on `PATH`) — BLE is implemented via the `bless` library (Python), which talks to BlueZ over D-Bus; there is no viable Node.js alternative (bleno conflicts with bluetoothd at the HCI level)
 - Node.js ≥ 18
 - SignalK server
@@ -57,6 +56,8 @@ Open the SignalK plugin settings page and configure:
 | `model` | `ORCA Core` | Model name shown in the app |
 | `enableBle` | `true` | Disable on systems without BlueZ |
 | `deltaIntervalMs` | `1000` | WebSocket update interval in milliseconds |
+| `mayaraHost` | `""` | Hostname or IP of the mayara-server instance. Leave empty to disable radar. |
+| `mayaraPort` | `6502` | mayara-server REST/WebSocket port |
 
 ## Pairing the ORCA app
 
