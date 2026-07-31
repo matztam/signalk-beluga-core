@@ -1,6 +1,6 @@
 {
   "name": "signalk-beluga-core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "ORCA Core emulator for SignalK — BLE advertisement, mDNS, REST API and WebSocket sensor stream compatible with the ORCA app",
   "main": "index.js",
   "files": [
@@ -27,6 +27,9 @@
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test"
   },
   "dependencies": {
     "@mongodb-js/zstd": "^7.0.0",
