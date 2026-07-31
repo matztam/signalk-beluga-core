@@ -1,5 +1,6 @@
 node_modules/
 .venv/
+.ble_beacon.pid
 *.log
 .env
 npm-debug.log*
