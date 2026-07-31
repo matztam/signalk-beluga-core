@@ -52,7 +52,7 @@ Open the SignalK plugin settings page and configure:
 |--------|---------|-------------|
 | `deviceId` | `orca01` | 6 alphanumeric characters — becomes `orca-<deviceId>` |
 | `wifiSsid` | `""` | Must match the phone's current WiFi SSID for BLE pairing |
-| `firmwareVersion` | `2026.3.1` | Firmware version reported to the ORCA app |
+| `firmwareVersion` | `2026.25.1` | Firmware version reported to the ORCA app |
 | `model` | `ORCA Core` | Model name shown in the app |
 | `enableBle` | `true` | Disable on systems without BlueZ |
 | `deltaIntervalMs` | `1000` | WebSocket update interval in milliseconds |
