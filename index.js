@@ -180,12 +180,6 @@ module.exports = function (app) {
     radar    = wantRadar ? new Radar(ctx) : null
     ble      = wantBle ? new Ble(ctx) : null
 
-    app.debug('autopilotApi defaultProviderId=%s defaultDeviceId=%s devices=%s',
-      app.autopilotApi?.defaultProviderId,
-      app.autopilotApi?.defaultDeviceId,
-      JSON.stringify([...( app.autopilotApi?.deviceToProvider?.keys() ?? [])])
-    )
-
     mdns.start()
     api.start()
     wsServer.start()
