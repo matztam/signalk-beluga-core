@@ -57,7 +57,7 @@ module.exports = function (app) {
     firmwareVersion: {
       type:    'string',
       title:   'Firmware version reported to the ORCA app',
-      default: '2026.3.1'
+      default: '2026.25.1'
     },
     model: {
       type:    'string',
@@ -156,7 +156,7 @@ module.exports = function (app) {
     }
 
     const deviceName      = `orca-${deviceId}`
-    const firmwareVersion = options.firmwareVersion || '2026.3.1'
+    const firmwareVersion = options.firmwareVersion || '2026.25.1'
     const model           = options.model || 'ORCA Core'
     const wifiSsid        = options.wifiSsid || ''
     const deltaIntervalMs = options.deltaIntervalMs || 1000
