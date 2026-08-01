@@ -6,6 +6,7 @@
   "files": [
     "index.js",
     "lib/",
+    "test/",
     "ble_beacon.py",
     "README.md",
     "LICENSE"
