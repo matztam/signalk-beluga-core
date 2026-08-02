@@ -11,6 +11,11 @@
     "README.md",
     "LICENSE"
   ],
+  "signalk": {
+    "screenshots": [
+      "https://raw.githubusercontent.com/matztam/signalk-beluga-core/main/screenshots/config-ui.png"
+    ]
+  },
 
   "keywords": [
     "signalk-node-server-plugin",
