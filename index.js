@@ -86,6 +86,16 @@ module.exports = function (app) {
       description: 'When enabled, every incoming SignalK delta is forwarded immediately, ignoring the ?interval= parameter. Useful for testing; may increase CPU usage.',
       default:     false
     },
+    _routeHeader: {
+      type:  'null',
+      title: 'Routes'
+    },
+    publishRoutes: {
+      type:        'boolean',
+      title:       'Publish routes from the app to SignalK',
+      description: 'The ORCA app sends the route it is navigating to the Core. Store it in SignalK resources so the rest of the server — Freeboard, for instance — can display and edit it. Each distinct route is stored once, under a name you are meant to change in Freeboard; re-sending a route already stored leaves it untouched, so the name you gave it survives. Cancelling navigation in the app does not remove anything. Requires a routes resource provider.',
+      default:     false
+    },
     _radarHeader: {
       type:  'null',
       title: 'Radar (mayara)'
@@ -122,6 +132,7 @@ module.exports = function (app) {
     const ui = {
       _bleHeader:   { 'ui:classNames': 'mt-4' },
       _radarHeader: { 'ui:classNames': 'mt-4' },
+      _routeHeader: { 'ui:classNames': 'mt-4' },
     }
     if (statusText) {
       const alertClass = statusText.startsWith('⛔') ? 'alert alert-danger'
@@ -162,7 +173,9 @@ module.exports = function (app) {
     const deltaIntervalMs = options.deltaIntervalMs || 1000
 
     const ignoreAppInterval = options.ignoreAppInterval === true
-    const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort }
+
+    const publishRoutes = options.publishRoutes === true
+    const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort, publishRoutes }
 
     let wantBle   = options.enableBle !== false
     let bleWarning = ''
