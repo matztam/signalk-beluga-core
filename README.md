@@ -135,11 +135,18 @@ This clears all stale BlueZ state. The ORCA app can then read the advertisement 
 
 **Note:** `@abandonware/bleno` (Node.js) conflicts with `bluetoothd` at the HCI level and does **not** work alongside BlueZ. Use the included Python/bless approach instead.
 
-**Symptom:** The phone shows a Bluetooth pairing request (on both Android and iOS) when connecting, which never completes.
+**Symptom:** The phone shows a Bluetooth pairing request (on both Android and iOS) shortly after connecting, which never completes.
 
-**Cause:** None of the advertised characteristics require encryption and the plugin never registers a pairing agent, but BlueZ's `Adapter1.Pairable` property defaults to `true`. If the phone's OS initiates bonding on its own, BlueZ accepts the request (because the adapter is pairable) but has no agent to actually complete it, so the dialog hangs. The real ORCA Core doesn't appear to support bonding either — it isn't required for the app to pair and read the advertisement characteristics.
+**Cause (partial):** None of the advertised characteristics require encryption and the plugin never registers a pairing agent, but BlueZ's `Adapter1.Pairable` property defaults to `true`. The plugin sets `Pairable = false` on the adapter at startup, which stops the phone's own OS from starting a bonding attempt — but a pairing prompt can still appear from a second, unrelated cause below.
 
-**Fix:** the plugin sets `Pairable = false` on the adapter at startup, so BlueZ declines incoming pairing requests outright instead of accepting one it can't finish.
+**Cause (main one, confirmed via `btmon`):** right after the advertisement characteristics are read, BlueZ tries to upgrade the connection to [EATT](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf) (Enhanced ATT, an L2CAP channel on PSM 39/0x27 that lets multiple GATT requests run concurrently — standard BlueZ behavior since Bluetooth 5.2, not something this plugin asks for). The phone's OS refuses that channel with "insufficient authentication", and BlueZ reacts to *that* refusal by sending a Security Request — which is the pairing prompt, and which can never complete since nothing here handles pairing.
+
+**Fix:** disable EATT system-wide in `/etc/bluetooth/main.conf`:
+```ini
+[GATT]
+Channels = 1
+```
+Then `sudo systemctl restart bluetooth`. This is a BlueZ daemon setting, not something the plugin can turn off per-connection over D-Bus — it has to be set on the host before the plugin starts, and it affects every Bluetooth application on the machine, not just this one.
 
 ## SignalK → ORCA key mapping
 
