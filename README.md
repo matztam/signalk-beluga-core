@@ -17,6 +17,28 @@ It makes the ORCA app (`com.theorca.slate`) connect to your SignalK server.
 
 SignalK paths are read from the running server via `app.getSelfPath()` and translated into the flat key format the ORCA app expects.
 
+## Routes
+
+The ORCA app sends the route it is navigating to the Core on `PUT /v1/navigation/route`, as a GeoJSON `FeatureCollection` containing one `LineString`.
+
+The app sends it when navigation starts or changes, not on a timer, so after a SignalK restart there is no route to show until the app next changes one.
+
+Enable `publishRoutes` to store those routes in the SignalK resources API, which makes them visible to the rest of the server — chart plotters such as Freeboard, for instance — and editable there. Off by default, since writing to the server's resources is opt-in, and it needs a routes resource provider; without one the push is still answered normally and the plugin reports the error on its config page.
+
+Each distinct route is stored **once, and then never touched again**. Renaming is the reason it is not rewritten: the app re-sends its route on every change, so a plugin that kept the entry in sync would overwrite your name the next time you nudged a waypoint.
+
+The starting name comes from the app's own timestamp for the route, in server-local time, e.g. `ORCA 2026-08-03 20:19`, falling back to the time it arrived if the app sends none. Note that this is when the route was last *edited*, not when you started navigating it — one drawn yesterday and sailed today carries yesterday's name. It is also not unique: the resolution is minutes. It is a starting point, and you are meant to rename it to something you recognise.
+
+A route is recognised by the `hash` the app sends with it and by a digest of its geometry, matching on either. So:
+
+- Sending the same route again does nothing.
+- Changing the route in the app stores a **new** route alongside the old one. Both stay.
+- Cancelling navigation in the app removes nothing.
+
+**Routes accumulate, and there is no limit.** The app re-sends on every change, so an evening of planning with a few waypoints nudged leaves a handful of near-identical routes with names a minute apart. Deleting is left to you, in Freeboard or through the resources API. That is a deliberate trade: the alternative loses routes you renamed and meant to keep.
+
+Note that this stores routes, it does not navigate them. Which route is *active* is decided by whatever is actually navigating — the app itself, or a chart plotter — and reaches SignalK through the Course API, not through here.
+
 ## Radar support
 
 Radar data is forwarded from a [mayara-server](https://github.com/MarineYachtRadar/mayara-server) instance. Configure the mayara-server host and port in the plugin settings to enable radar. beluga-core connects directly to mayara's REST and WebSocket API — no mayara SignalK plugin required. Spokes are re-encoded and sent to the ORCA app once per antenna revolution. If no mayara host is configured, the radar ports are not opened. Discovery is retried every 15 seconds if the radar is not yet transmitting.
@@ -50,12 +72,14 @@ Open the SignalK plugin settings page and configure:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `deviceId` | `orca01` | 6 alphanumeric characters — becomes `orca-<deviceId>` |
-| `wifiSsid` | `""` | Must match the phone's current WiFi SSID for BLE pairing |
+| `deviceId` | generated | 6 alphanumeric characters — becomes `orca-<deviceId>`. Generated on first start and kept |
+| `wifiSsid` | `""` | **Required.** Must match the phone's current WiFi SSID for BLE pairing |
 | `firmwareVersion` | `2026.25.1` | Firmware version reported to the ORCA app |
 | `model` | `ORCA Core` | Model name shown in the app |
 | `enableBle` | `true` | Disable on systems without BlueZ |
 | `deltaIntervalMs` | `1000` | WebSocket update interval in milliseconds |
+| `ignoreAppInterval` | `false` | Ignore the update interval the app asks for and keep the one above |
+| `publishRoutes` | `false` | Store routes the app sends into SignalK resources |
 | `mayaraHost` | `""` | Hostname or IP of the mayara-server instance. Leave empty to disable radar. |
 | `mayaraPort` | `6502` | mayara-server REST/WebSocket port |
 
@@ -66,7 +90,7 @@ Open the SignalK plugin settings page and configure:
 1. Make sure the phone and the SignalK host are on the **same WiFi network**.
 2. Set `wifiSsid` in the plugin config to that network's SSID.
 3. Close the GNOME Bluetooth settings panel (or similar application) if it is open — it creates a persistent scan session in BlueZ that causes GATT connection timeouts (see [BLE troubleshooting](#ble-troubleshooting)).
-4. Start the plugin. The device appears in the ORCA app's pairing screen ".
+4. Start the plugin. The device appears in the ORCA app's pairing screen.
 5. After BLE pairing the app switches to mDNS → REST → WebSocket automatically.
 
 ### Alternative path: Direct-AP mode (no BLE, no mDNS required)
