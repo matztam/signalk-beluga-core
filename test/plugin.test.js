@@ -11,7 +11,9 @@ function mockApp () {
     debug:             () => {},
     setPluginError:    (m) => errors.push(m),
     setPluginStatus:   (m) => statuses.push(m),
-    savePluginOptions: (o, cb) => { savedOpts.push(o); if (cb) cb() },
+    // The server calls the callback unconditionally after writing, so a plugin that omits it
+    // throws on first start. Mirror that here rather than tolerating it.
+    savePluginOptions: (o, cb) => { savedOpts.push(o); cb(null) },
     errors, statuses, savedOpts
   }
 }
