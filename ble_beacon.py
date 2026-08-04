@@ -86,8 +86,19 @@ async def _configure_adapter():
             await props.call_set("org.bluez.Adapter1", "Connectable", Variant("b", True))
         except Exception:
             pass
+        # Pairable defaults to true in BlueZ. None of our characteristics require
+        # encryption and no pairing agent is registered, so leaving it at the
+        # default lets the phone's OS initiate bonding on its own (observed on
+        # both Android and iOS) — BlueZ then accepts the request but can never
+        # complete it without an agent, surfacing a pairing dialog that hangs.
+        # Bonding isn't required for the app to pair and read the advertisement
+        # characteristics, so refuse incoming pairing requests outright instead.
+        try:
+            await props.call_set("org.bluez.Adapter1", "Pairable", Variant("b", False))
+        except Exception:
+            pass
         bus.disconnect()
-        log.info("Adapter configured: Discoverable=on")
+        log.info("Adapter configured: Discoverable=on Pairable=off")
     except Exception as e:
         log.warning("Adapter config skipped: %s", e)
 

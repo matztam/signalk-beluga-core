@@ -107,9 +107,15 @@ bluetoothctl scan off
 sudo systemctl restart bluetooth
 ```
 
-This clears all stale BlueZ state. The ORCA app can then complete GATT pairing successfully.
+This clears all stale BlueZ state. The ORCA app can then read the advertisement characteristics without the connection dropping.
 
 **Note:** `@abandonware/bleno` (Node.js) conflicts with `bluetoothd` at the HCI level and does **not** work alongside BlueZ. Use the included Python/bless approach instead.
+
+**Symptom:** The phone shows a Bluetooth pairing request (on both Android and iOS) when connecting, which never completes.
+
+**Cause:** None of the advertised characteristics require encryption and the plugin never registers a pairing agent, but BlueZ's `Adapter1.Pairable` property defaults to `true`. If the phone's OS initiates bonding on its own, BlueZ accepts the request (because the adapter is pairable) but has no agent to actually complete it, so the dialog hangs. The real ORCA Core doesn't appear to support bonding either — it isn't required for the app to pair and read the advertisement characteristics.
+
+**Fix:** the plugin sets `Pairable = false` on the adapter at startup, so BlueZ declines incoming pairing requests outright instead of accepting one it can't finish.
 
 ## SignalK → ORCA key mapping
 
