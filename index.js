@@ -151,7 +151,8 @@ module.exports = function (app) {
     let deviceId = options.deviceId
     if (!deviceId || !ID_RE.test(deviceId)) {
       deviceId = randomDeviceId()
-      app.savePluginOptions({ ...options, deviceId })
+      // The callback is not optional: the server calls it unconditionally after writing.
+      app.savePluginOptions({ ...options, deviceId }, () => {})
       app.debug(`Generated device ID: ${deviceId}`)
     }
 
