@@ -206,7 +206,7 @@ module.exports = function (app) {
         bleWarning = ` ⚠ BLE disabled (${missing.join(', ')}) — app discovery via mDNS only`
         wantBle = false
       } else if (eattLikelyOn()) {
-        bleWarning = ' ⚠ phone may show a Bluetooth pairing request during BLE discovery — ' +
+        bleWarning = '\n⚠ phone may show a Bluetooth pairing request during BLE discovery — ' +
           'safe to ignore, pairing is not required and the app connects normally either way ' +
           '(set Channels=1 under [GATT] in /etc/bluetooth/main.conf to stop it appearing)'
       }
