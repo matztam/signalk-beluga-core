@@ -139,14 +139,16 @@ This clears all stale BlueZ state. The ORCA app can then read the advertisement 
 
 **Cause (partial):** None of the advertised characteristics require encryption and the plugin never registers a pairing agent, but BlueZ's `Adapter1.Pairable` property defaults to `true`. The plugin sets `Pairable = false` on the adapter at startup, which stops the phone's own OS from starting a bonding attempt — but a pairing prompt can still appear from a second, unrelated cause below.
 
-**Cause (main one, confirmed via `btmon`):** right after the advertisement characteristics are read, BlueZ tries to upgrade the connection to [EATT](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf) (Enhanced ATT, an L2CAP channel on PSM 39/0x27 that lets multiple GATT requests run concurrently — standard BlueZ behavior since Bluetooth 5.2, not something this plugin asks for). The phone's OS refuses that channel with "insufficient authentication", and BlueZ reacts to *that* refusal by sending a Security Request — which is the pairing prompt, and which can never complete since nothing here handles pairing.
+**Cause (main one, confirmed via `btmon`):** right after the advertisement characteristics are read, BlueZ tries to upgrade the connection to [EATT](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf) (Enhanced ATT, an L2CAP channel on PSM 39/0x27 that lets multiple GATT requests run concurrently — standard BlueZ behavior since Bluetooth 5.2, not something this plugin asks for). The phone's OS refuses that channel with "insufficient authentication", and BlueZ reacts to *that* refusal by sending a Security Request — which is the pairing prompt. The phone then sends a Pairing Request in response, and BlueZ itself immediately answers `Pairing Failed: Pairing not supported` — no agent is involved and none is needed, BlueZ never actually waits on anything here. **The prompt is harmless**: pairing was never required for the app to connect, and the app keeps working normally regardless of whether the prompt is tapped, dismissed, or ignored.
+
+The plugin detects an EATT-permissive `main.conf` at every start and adds a note to its status field on the config page as a heads-up, but doesn't change the file itself — see the fix below for why.
 
 **Fix:** disable EATT system-wide in `/etc/bluetooth/main.conf`:
 ```ini
 [GATT]
 Channels = 1
 ```
-Then `sudo systemctl restart bluetooth`. This is a BlueZ daemon setting, not something the plugin can turn off per-connection over D-Bus — it has to be set on the host before the plugin starts, and it affects every Bluetooth application on the machine, not just this one.
+Then `sudo systemctl restart bluetooth`. This is a BlueZ daemon setting, not something the plugin can turn off per-connection over D-Bus — there's no `GattManager1` or `Adapter1` option for it (confirmed against the BlueZ source: `Channels` is parsed straight into a daemon-wide options struct, not anything per-adapter). It has to be set on the host before the plugin starts, and it affects every Bluetooth application on the machine, not just this one — which is also why the plugin only warns about it instead of editing the file itself.
 
 ## SignalK → ORCA key mapping
 
