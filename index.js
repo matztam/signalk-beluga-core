@@ -60,6 +60,7 @@ module.exports = function (app) {
 
   let ble, api, wsServer, mdns, radar
   let statusText = ''
+  let bleNotice  = ''
 
   const SCHEMA_PROPS = {
     deviceId: {
@@ -137,9 +138,10 @@ module.exports = function (app) {
   // SignalK calls plugin.schema() / plugin.uiSchema() on every /plugins API
   // request when they are functions — enables live status on the config page.
   plugin.schema = function () {
-    const props = statusText
-      ? { _status: { type: 'null', title: statusText }, ...SCHEMA_PROPS }
-      : SCHEMA_PROPS
+    const extra = {}
+    if (statusText) extra._status = { type: 'null', title: statusText }
+    if (bleNotice)  extra._bleNotice = { type: 'null', title: bleNotice }
+    const props = Object.keys(extra).length > 0 ? { ...extra, ...SCHEMA_PROPS } : SCHEMA_PROPS
     return {
       type:        'object',
       description: 'Documentation and source: https://github.com/matztam/signalk-beluga-core',
@@ -159,6 +161,9 @@ module.exports = function (app) {
         : statusText.includes('⚠')                  ? 'alert alert-warning'
         :                                              'alert alert-success'
       ui._status = { 'ui:classNames': alertClass + ' p-2 mb-2' }
+    }
+    if (bleNotice) {
+      ui._bleNotice = { 'ui:classNames': 'alert alert-warning p-2 mb-2' }
     }
     return ui
   }
@@ -200,15 +205,16 @@ module.exports = function (app) {
 
     let wantBle   = options.enableBle !== false
     let bleWarning = ''
+    bleNotice = ''
     if (wantBle) {
       const missing = checkBleRequirements()
       if (missing.length > 0) {
         bleWarning = ` ⚠ BLE disabled (${missing.join(', ')}) — app discovery via mDNS only`
         wantBle = false
       } else if (eattLikelyOn()) {
-        bleWarning = '\n⚠ phone may show a Bluetooth pairing request during BLE discovery — ' +
-          'safe to ignore, pairing is not required and the app connects normally either way ' +
-          '(set Channels=1 under [GATT] in /etc/bluetooth/main.conf to stop it appearing)'
+        bleNotice = '⚠ Phone may show a Bluetooth pairing request during BLE discovery — ' +
+          'safe to ignore, pairing is not required and the app connects normally either way. ' +
+          'Set Channels=1 under [GATT] in /etc/bluetooth/main.conf to stop it appearing.'
       }
     }
 
@@ -244,6 +250,7 @@ module.exports = function (app) {
     if (api)      { api.stop();      api      = null }
     if (mdns)     { mdns.stop();     mdns     = null }
     statusText = ''
+    bleNotice  = ''
     app.setPluginStatus('Stopped')
   }
 
