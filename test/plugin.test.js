@@ -109,8 +109,9 @@ test('warns about the EATT pairing prompt when main.conf does not disable it', {
   t.after(() => plugin.stop())
 
   plugin.start(defaults)
-  const status = plugin.schema().properties._status.title
-  assert.match(status, /pairing request/)
+  const schema = plugin.schema()
+  assert.ok(schema.properties._bleNotice, '_bleNotice field should be present')
+  assert.match(schema.properties._bleNotice.title, /pairing request/)
 })
 
 test('does not warn about EATT when main.conf disables it', { skip: !bleAvailable() }, (t) => {
@@ -128,6 +129,26 @@ test('does not warn about EATT when main.conf disables it', { skip: !bleAvailabl
   t.after(() => plugin.stop())
 
   plugin.start(defaults)
-  const status = plugin.schema().properties._status.title
-  assert.doesNotMatch(status, /pairing request/)
+  const schema = plugin.schema()
+  assert.equal(schema.properties._bleNotice, undefined, '_bleNotice field should be absent')
+})
+
+test('does not warn about EATT when BLE is disabled', { skip: !bleAvailable() }, (t) => {
+  const app     = mockApp()
+  const factory = require('../index.js')
+  const plugin  = factory(app)
+  const defaults = schemaDefaults(plugin.schema())
+  defaults.mayaraHost = ''
+  defaults.enableBle  = false
+
+  const real = fs.readFileSync
+  t.mock.method(fs, 'readFileSync', (p, enc) => {
+    if (p === '/etc/bluetooth/main.conf') return '[GATT]\n#Channels = 3\n'
+    return real(p, enc)
+  })
+  t.after(() => plugin.stop())
+
+  plugin.start(defaults)
+  const schema = plugin.schema()
+  assert.equal(schema.properties._bleNotice, undefined, '_bleNotice field should be absent when BLE is off')
 })
