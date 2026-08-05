@@ -1,11 +1,14 @@
 'use strict'
 
 const { spawnSync } = require('child_process')
+const fs    = require('fs')
 const Ble   = require('./lib/ble')
 const Api   = require('./lib/api')
 const Ws    = require('./lib/websocket')
 const Mdns  = require('./lib/mdns')
 const Radar = require('./lib/radar')
+
+const MAIN_CONF = '/etc/bluetooth/main.conf'
 
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789'
 const ID_RE    = /^[a-zA-Z0-9]{6}$/
@@ -29,6 +32,23 @@ function checkBleRequirements () {
   const bt = spawnSync('bluetoothctl', ['--version'], { stdio: 'pipe' })
   if (bt.error || bt.status !== 0) missing.push('BlueZ not found')
   return missing
+}
+
+// BlueZ's EATT (a parallel ATT channel most phones refuse without an
+// established bond) is on by default. The refusal makes BlueZ send a
+// Security Request, which surfaces as a BLE pairing prompt on the phone —
+// harmless (nothing here needs bonding, the app connects fine either way)
+// but confusing to see. Only /etc/bluetooth/main.conf can turn EATT off
+// (there's no per-connection or per-adapter D-Bus knob for it), so this
+// just reads the file to warn instead of silently living with the prompt.
+function eattLikelyOn () {
+  let conf
+  try { conf = fs.readFileSync(MAIN_CONF, 'utf8') } catch { return false }
+  const gatt = conf.match(/\[GATT\]([\s\S]*?)(\n\[|$)/)
+  if (!gatt) return true // section absent → BlueZ default (EATT on) applies
+  const channels = gatt[1].match(/^\s*Channels\s*=\s*(\d+)/m)
+  if (!channels) return true // commented out / unset → default of 3 applies
+  return parseInt(channels[1], 10) !== 1
 }
 
 module.exports = function (app) {
@@ -185,6 +205,10 @@ module.exports = function (app) {
       if (missing.length > 0) {
         bleWarning = ` ⚠ BLE disabled (${missing.join(', ')}) — app discovery via mDNS only`
         wantBle = false
+      } else if (eattLikelyOn()) {
+        bleWarning = ' ⚠ phone may show a Bluetooth pairing request during BLE discovery — ' +
+          'safe to ignore, pairing is not required and the app connects normally either way ' +
+          '(set Channels=1 under [GATT] in /etc/bluetooth/main.conf to stop it appearing)'
       }
     }
 
