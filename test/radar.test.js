@@ -49,3 +49,54 @@ test('array entries without an id are skipped', () => {
   assert.deepEqual(parseRadarList([{ name: 'no id' }, { id: 'nav1034A', ...INFO_A }]).map(([id]) => id),
     ['nav1034A'])
 })
+
+// ── ORCA status payload ─────────────────────────────────────────────────────
+// The app's sliders read these. They used to be hardcoded (gain 50/auto, sea 0,
+// rain 0) regardless of what the radar was actually set to.
+
+const Radar = require('../lib/radar')
+
+function statusFor (radar) {
+  return Radar.prototype._orcaStatus.call(null, radar)
+}
+
+const CONTROLS = {
+  gain:  { auto: true,  value: 45 },
+  sea:   { auto: false, value: 39 },
+  rain:  { value: 12 },
+  mode:  { value: 2 },
+  range: { value: 926 },
+}
+
+test('status reports the radar\'s real control values', () => {
+  const s = statusFor({ state: 'transmit', rangeMeters: 926, controls: CONTROLS })
+  assert.equal(s.gain, 45)
+  assert.equal(s.gain_auto, true)
+  assert.equal(s.sea, 39)
+  assert.equal(s.sea_auto, false)
+  assert.equal(s.rain, 12)
+  assert.equal(s.preset_mode, 2)
+  assert.equal(s.range, 926)
+})
+
+test('status maps mayara power states to ORCA numerics', () => {
+  assert.equal(statusFor({ state: 'transmit', controls: {} }).state, 8)
+  assert.equal(statusFor({ state: 'standby',  controls: {} }).state, 1)
+  assert.equal(statusFor({ state: 'off',      controls: {} }).state, 0)
+})
+
+test('status falls back to standby for an unknown radar', () => {
+  assert.equal(statusFor(undefined).state, 1)
+  assert.equal(statusFor(undefined).range, 0)
+})
+
+test('rain_auto is false when the control has no auto (Navico)', () => {
+  assert.equal(statusFor({ state: 'transmit', controls: CONTROLS }).rain_auto, false)
+})
+
+test('missing controls degrade to zeros rather than throwing', () => {
+  const s = statusFor({ state: 'standby', rangeMeters: 0, controls: {} })
+  assert.equal(s.gain, 0)
+  assert.equal(s.gain_auto, false)
+  assert.equal(s.preset_mode, 0)
+})
