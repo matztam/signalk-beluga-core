@@ -100,3 +100,14 @@ test('missing controls degrade to zeros rather than throwing', () => {
   assert.equal(s.gain_auto, false)
   assert.equal(s.preset_mode, 0)
 })
+
+// ── Range: selected vs spoke extent ─────────────────────────────────────────
+// A HALO on 1852 m emits spokes spanning 3183 m. The frame must declare the
+// extent its pixels actually cover; the app's readout must show what the
+// operator selected. Holding both in one field made them race.
+
+test('spoke range and selected range are tracked separately', () => {
+  const r = { thetaCount: 2048, rhoCount: 1024, rangeMeters: 1852, spokeRange: 3183, controls: {}, state: 'transmit' }
+  assert.equal(statusFor(r).range, 1852, 'status reports the selected range')
+  assert.equal(r.spokeRange, 3183, 'frame scaling uses the spoke extent')
+})
