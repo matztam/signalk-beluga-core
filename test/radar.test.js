@@ -111,3 +111,23 @@ test('spoke range and selected range are tracked separately', () => {
   assert.equal(statusFor(r).range, 1852, 'status reports the selected range')
   assert.equal(r.spokeRange, 3183, 'frame scaling uses the spoke extent')
 })
+
+// ── Preset modes ────────────────────────────────────────────────────────────
+// A HALO reports custom/harbor/offshore/buoy/weather/bird/bird+ over 0..6.
+// These were hardcoded as harbor/coastal/offshore/weather for 0..3, so picking
+// "harbor" in the app actually set Custom.
+
+const { parseModes } = require('../lib/radar')
+
+test('preset modes come from the radar, ordered by value', () => {
+  const modes = parseModes({ '1': 'Harbor', '6': 'Bird+', '5': 'Bird', '0': 'Custom',
+                             '3': 'Buoy', '4': 'Weather', '2': 'Offshore' })
+  assert.deepEqual(modes, [
+    [0, 'custom'], [1, 'harbor'], [2, 'offshore'], [3, 'buoy'],
+    [4, 'weather'], [5, 'bird'], [6, 'bird+'],
+  ])
+})
+
+test('preset modes are null when the radar reports none', () => {
+  for (const bad of [undefined, null, {}, 'nope', 42]) assert.equal(parseModes(bad), null)
+})
