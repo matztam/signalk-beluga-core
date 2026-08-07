@@ -181,3 +181,35 @@ test('no legend falls back to a linear ramp', () => {
   assert.equal(lut[0], 0)
   assert.equal(lut[15], 255)
 })
+
+test('radars are ordered deterministically', () => {
+  // mayara serialises from a Rust hash map, so key order varies per request.
+  // The app takes the first radar it is offered, so the order must not.
+  const A = { name: 'Halo A' }, B = { name: 'Halo B' }
+  const forward = parseRadarList({ version: '3.4.0', radars: { nav1034A: A, nav1034B: B } })
+  const reverse = parseRadarList({ version: '3.4.0', radars: { nav1034B: B, nav1034A: A } })
+  assert.deepEqual(forward.map(([id]) => id), ['nav1034A', 'nav1034B'])
+  assert.deepEqual(reverse.map(([id]) => id), ['nav1034A', 'nav1034B'])
+})
+
+test('deeper palettes scale to their own depth, not a hardcoded 16', () => {
+  for (const depth of [8, 16, 32, 64, 256]) {
+    const lut = buildPixelLut({
+      pixelValues: depth,
+      legend: { pixels: Array.from({ length: depth }, () => ({ type: 'normal' })) },
+    })
+    assert.equal(lut[0], 0, `depth ${depth}: no return transparent`)
+    assert.equal(lut[depth - 1], 255, `depth ${depth}: strongest return saturates`)
+    assert.equal(lut[Math.floor((depth - 1) / 2)], Math.round((Math.floor((depth - 1) / 2) * 255) / (depth - 1)))
+  }
+})
+
+test('doppler is found by legend type, not by hardcoded index', () => {
+  // Navico puts doppler at 17/18. A brand that puts it elsewhere still works.
+  const pixels = Array.from({ length: 40 }, () => ({ type: 'normal' }))
+  pixels[33] = { type: 'dopplerApproaching' }
+  pixels[34] = { type: 'dopplerReceding' }
+  const lut = buildPixelLut({ pixelValues: 32, legend: { pixels } })
+  assert.equal(lut[33], 255)
+  assert.equal(lut[34], 255)
+})
