@@ -131,3 +131,53 @@ test('preset modes come from the radar, ordered by value', () => {
 test('preset modes are null when the radar reports none', () => {
   for (const bad of [undefined, null, {}, 'nope', 42]) assert.equal(parseModes(bad), null)
 })
+
+// ── Pixel intensity mapping ─────────────────────────────────────────────────
+// mayara sends palette indices; ORCA wants 8-bit intensity. Forwarding indices
+// verbatim made the strongest return arrive as 15/255 — a black overlay.
+
+const { buildPixelLut } = require('../lib/radar')
+
+const HALO_CAP = {
+  pixelValues: 16,
+  legend: {
+    pixels: [
+      ...Array.from({ length: 16 }, () => ({ type: 'normal' })),
+      { type: 'history' },
+      { type: 'dopplerApproaching' },
+      { type: 'dopplerReceding' },
+      ...Array.from({ length: 32 }, () => ({ type: 'history' })),
+    ],
+  },
+}
+
+test('return strengths scale across the full 8-bit range', () => {
+  const lut = buildPixelLut(HALO_CAP)
+  assert.equal(lut[0], 0, 'no return stays transparent')
+  assert.equal(lut[15], 255, 'strongest return reaches full intensity')
+  assert.equal(lut[8], 136)
+})
+
+test('doppler indices paint at full intensity', () => {
+  const lut = buildPixelLut(HALO_CAP)
+  assert.equal(lut[17], 255)
+  assert.equal(lut[18], 255)
+})
+
+test('history/trail levels are dropped, not painted as live returns', () => {
+  const lut = buildPixelLut(HALO_CAP)
+  assert.equal(lut[16], 0)
+  for (let i = 19; i <= 50; i++) assert.equal(lut[i], 0, `history index ${i}`)
+})
+
+test('a radar with a non-16 palette scales to its own depth', () => {
+  const lut = buildPixelLut({ pixelValues: 8, legend: { pixels: Array.from({ length: 8 }, () => ({ type: 'normal' })) } })
+  assert.equal(lut[7], 255, '8-level palette tops out at 255')
+  assert.equal(lut[0], 0)
+})
+
+test('no legend falls back to a linear ramp', () => {
+  const lut = buildPixelLut(null)
+  assert.equal(lut[0], 0)
+  assert.equal(lut[15], 255)
+})
