@@ -173,7 +173,7 @@ module.exports = function (app) {
     const mayaraPort = options.mayaraPort || 6502
     const wantRadar  = !!mayaraHost
 
-    const busy = busyPorts([8080, 8088, 8089, ...(wantRadar ? [9081, 9089] : [])])
+    const busy = busyPorts([8080, 8088, 8089, 8090, ...(wantRadar ? [9081, 9089] : [])])
     if (busy.length > 0) {
       const msg = `Port${busy.length > 1 ? 's' : ''} already in use: ${busy.join(', ')} — stop the conflicting service and restart the plugin`
       statusText = `⛔ ${msg}`
@@ -201,7 +201,10 @@ module.exports = function (app) {
     const ignoreAppInterval = options.ignoreAppInterval === true
 
     const publishRoutes = options.publishRoutes === true
-    const ctx = { app, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort, publishRoutes }
+    // `options` itself, not just the fields pulled from it: lib/api.js needs the
+    // full object to save a firmware version learned from a real update upload
+    // without needing to know every other option that must be preserved.
+    const ctx = { app, options, deviceId, deviceName, firmwareVersion, model, wifiSsid, deltaIntervalMs, ignoreAppInterval, mayaraHost, mayaraPort, publishRoutes }
 
     let wantBle   = options.enableBle !== false
     let bleWarning = ''
