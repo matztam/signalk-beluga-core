@@ -136,7 +136,7 @@ test('preset modes are null when the radar reports none', () => {
 // mayara sends palette indices; ORCA wants 8-bit intensity. Forwarding indices
 // verbatim made the strongest return arrive as 15/255 — a black overlay.
 
-const { buildPixelLut } = require('../lib/radar')
+const { buildPixelLut, capHasDoppler } = require('../lib/radar')
 
 const HALO_CAP = {
   pixelValues: 16,
@@ -151,17 +151,18 @@ const HALO_CAP = {
   },
 }
 
-test('return strengths scale across the full 8-bit range', () => {
+test('return strengths scale across the returns range (top two reserved for doppler)', () => {
+  // HALO_CAP has Doppler, so returns top out at 253 and 254/255 are reserved.
   const lut = buildPixelLut(HALO_CAP)
   assert.equal(lut[0], 0, 'no return stays transparent')
-  assert.equal(lut[15], 255, 'strongest return reaches full intensity')
-  assert.equal(lut[8], 136)
+  assert.equal(lut[15], 253, 'strongest return reaches the top of the returns range')
+  assert.equal(lut[8], 135)
 })
 
-test('doppler indices paint at full intensity', () => {
+test('doppler indices map to the reserved intensities (approaching 255, receding 254)', () => {
   const lut = buildPixelLut(HALO_CAP)
-  assert.equal(lut[17], 255)
-  assert.equal(lut[18], 255)
+  assert.equal(lut[17], 255, 'approaching → red')
+  assert.equal(lut[18], 254, 'receding → green')
 })
 
 test('history/trail levels are dropped, not painted as live returns', () => {
@@ -210,6 +211,19 @@ test('doppler is found by legend type, not by hardcoded index', () => {
   pixels[33] = { type: 'dopplerApproaching' }
   pixels[34] = { type: 'dopplerReceding' }
   const lut = buildPixelLut({ pixelValues: 32, legend: { pixels } })
-  assert.equal(lut[33], 255)
-  assert.equal(lut[34], 255)
+  assert.equal(lut[33], 255, 'approaching → 255')
+  assert.equal(lut[34], 254, 'receding → 254')
+})
+
+test('a non-doppler radar keeps the full range and reserves nothing', () => {
+  const cap = { pixelValues: 16, legend: { pixels: Array.from({ length: 16 }, () => ({ type: 'normal' })) } }
+  assert.equal(capHasDoppler(cap), false)
+  assert.equal(buildPixelLut(cap)[15], 255, 'strongest return still reaches 255 without doppler')
+})
+
+test('capHasDoppler: from the hasDoppler flag or a doppler legend entry', () => {
+  assert.equal(capHasDoppler({ hasDoppler: true }), true)
+  assert.equal(capHasDoppler({ legend: { pixels: [{ type: 'normal' }, { type: 'dopplerReceding' }] } }), true)
+  assert.equal(capHasDoppler({ legend: { pixels: [{ type: 'normal' }] } }), false)
+  assert.equal(capHasDoppler(null), false)
 })
