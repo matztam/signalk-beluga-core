@@ -12,6 +12,7 @@ It makes the ORCA app (`com.theorca.slate`) connect to your SignalK server.
 | REST API | 8088 | Handles all ORCA app HTTP endpoints (`/v1/devices`, `/v1/sources`, `/v1/nmea2000/status`, …) |
 | UI stub | 8080 | Responds to `/info` so the app skips its boot delay |
 | WebSocket | 8089 | Streams sensor deltas (`/v1/sensors/delta`) and AIS deltas (`?ns=ais`) to the app |
+| Firmware update | 8090 | Reads the version out of a Core firmware update the app tries to install — see [Firmware updates](#firmware-updates) |
 | Radar REST | 9081 | Handles `/v1/radars` and radar command/status endpoints _(only when mayara host is configured)_ |
 | Radar WebSocket | 9089 | Streams radar spoke frames (`/v1/spokes/:id/delta`) to the app _(only when mayara host is configured)_ |
 
@@ -42,6 +43,14 @@ Note that this stores routes, it does not navigate them. Which route is *active*
 ## Radar support
 
 Radar data is forwarded from a [mayara-server](https://github.com/MarineYachtRadar/mayara-server) instance. Configure the mayara-server host and port in the plugin settings to enable radar. beluga-core connects directly to mayara's REST and WebSocket API — no mayara SignalK plugin required. Spokes are re-encoded and sent to the ORCA app once per antenna revolution. If no mayara host is configured, the radar ports are not opened. Discovery is retried every 15 seconds if the radar is not yet transmitting.
+
+## Firmware updates
+
+When the ORCA app sees a newer Core firmware than the device reports, it offers an update and, if you accept, uploads the firmware image straight to the Core. A real Core flashes it; beluga-core does not — there is nothing to flash — but the version string is worth having, since it is what the app displays and compares against next time.
+
+The plugin reads just enough of the upload to find that version string, then drops the connection rather than receiving the rest of a several-hundred-MB image it has no use for. The app will report the update as failed, which is accurate — nothing was flashed — but the version shown in the app updates anyway, and the setting persists across restarts.
+
+If the "failed" update bothers you, there is nothing to fix: it means the version was read successfully.
 
 ## Requirements
 
