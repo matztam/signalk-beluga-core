@@ -227,3 +227,46 @@ test('capHasDoppler: from the hasDoppler flag or a doppler legend entry', () => 
   assert.equal(capHasDoppler({ legend: { pixels: [{ type: 'normal' }] } }), false)
   assert.equal(capHasDoppler(null), false)
 })
+
+// mayara keeps a radar transmitting for every spoke subscriber it has, so the
+// stream to mayara must only exist while an app is actually looking.
+test('the spoke stream to mayara follows the app clients', async () => {
+  const WebSocket = require('ws')
+  const Radar = require('../lib/radar')
+
+  const upstream = new WebSocket.Server({ port: 0 })
+  const connections = []
+  upstream.on('connection', ws => connections.push(ws))
+  const once = (emitter, event) => new Promise(resolve => emitter.once(event, resolve))
+
+  const radar = new Radar({
+    app: { debug () {}, setPluginError () {}, setPluginStatus () {} },
+    mayaraHost: '127.0.0.1',
+    mayaraPort: upstream.address().port,
+  })
+  radar._startStatePoll = () => {}
+  radar._spokeMsgType = { decode: () => ({ spokes: [] }) }
+  const info = { id: 'nav1034A', name: 'Halo A', spokesPerRevolution: 2048, maxSpokeLen: 512 }
+
+  try {
+    radar._connect(info)
+    assert.equal(radar._sources.size, 0, 'discovery alone opens no stream')
+
+    const app = {}
+    radar._clients.set(info.id, new Set([app]))
+    const connected = once(upstream, 'connection')
+    radar._openSource(info.id)
+    await connected
+    assert.equal(radar._sources.has(info.id), true)
+
+    radar._clients.get(info.id).delete(app)
+    const closed = once(connections[0], 'close')
+    radar._closeSource(info.id)
+    await closed
+    assert.equal(radar._sources.has(info.id), false, 'the last client leaving closes the stream')
+    assert.equal(connections.length, 1, 'and it is not reopened')
+  } finally {
+    radar.stop()
+    upstream.close()
+  }
+})
