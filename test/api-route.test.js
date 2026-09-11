@@ -77,39 +77,59 @@ function ctx (opts) {
   }
 }
 
-// Api.start() binds fixed ports, which a test should not do. Capture the express app instead and
-// drive it directly, so express's own routing still decides which handler runs.
+// Api.start() binds fixed ports, which a test should not do — bind port 0 (a free one, picked by
+// the OS) instead, and hand the real server back. This drives requests through express's actual
+// body-parser, not a synthetic req object with `body` pre-filled: a real, bodyless PUT leaves
+// req.body undefined rather than {} (see the express 5 upgrade — that gap is exactly what let a
+// 500 on every bodyless request through unnoticed), and only a real socket exercises that.
 function apiUnderTest (opts) {
   const c = ctx(opts)
   const api = new Api(c)
-  const apps = []
-  api._listen = (expressApp) => { apps.push(expressApp); return { close () {} } }
+  const servers = []
+  // Real _listen(expressApp, port) pushes onto this._servers itself, which is what api.stop()
+  // closes — call through to it with port 0 rather than replacing it, or stop() has nothing to
+  // close and every bound port outlives the test.
+  const realListen = api._listen.bind(api)
+  api._listen = (expressApp) => {
+    const srv = realListen(expressApp, 0)
+    servers.push(srv)
+    return srv
+  }
   api.start()
-  return { api, c, rest: apps[0] }
+  liveApis.push(api)
+  return { api, c, rest: servers[0] }
 }
 
-function request (expressApp, method, url, body) {
-  return new Promise((resolve) => {
-    const req = {
+// Every real server bound above needs closing, or ports pile up across a test run. Tracked here
+// instead of a per-test try/finally, since most of these tests predate this and don't have one.
+const liveApis = []
+test.afterEach(() => {
+  while (liveApis.length) liveApis.pop().stop()
+})
+
+function request (server, method, url, body) {
+  return new Promise((resolve, reject) => {
+    const data = body === undefined ? null : JSON.stringify(body)
+    const req = http.request({
+      host:    '127.0.0.1',
+      port:    server.address().port,
       method,
-      url,
-      originalUrl: url,
-      baseUrl: '',
-      path: url,
-      headers: { 'content-type': 'application/json' },
-      body,
-      get (h) { return this.headers[h.toLowerCase()] }
-    }
-    const res = {
-      statusCode: 200,
-      status (c) { this.statusCode = c; return this },
-      set () { return this },
-      setHeader () { return this },
-      getHeader () { return undefined },
-      end () { resolve({ status: this.statusCode, body: this._json }) },
-      json (payload) { this._json = payload; this.end() }
-    }
-    expressApp(req, res)
+      path:    url,
+      // Connection: close, not keep-alive — otherwise the socket outlives server.close() and the
+      // test run never exits.
+      headers: { Connection: 'close', ...(data === null ? {} : { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }) }
+    }, (res) => {
+      let raw = ''
+      res.on('data', (d) => { raw += d })
+      res.on('end', () => {
+        let parsed
+        try { parsed = raw ? JSON.parse(raw) : undefined } catch { parsed = raw }
+        resolve({ status: res.statusCode, body: parsed })
+      })
+    })
+    req.on('error', reject)
+    if (data !== null) req.write(data)
+    req.end()
   })
 }
 
@@ -136,10 +156,12 @@ test('the app is answered before the resources API is touched at all', { timeout
   const c = ctx()
   c.app.resourcesApi.listResources = () => new Promise(r => { release = r })
   const api = new Api(c)
-  const apps = []
-  api._listen = (a) => { apps.push(a); return { close () {} } }
+  const servers = []
+  const realListen = api._listen.bind(api)
+  api._listen = (a) => { const srv = realListen(a, 0); servers.push(srv); return srv }
   api.start()
-  const res = await request(apps[0], 'PUT', '/v1/navigation/route', ORCA_ROUTE)
+  liveApis.push(api)
+  const res = await request(servers[0], 'PUT', '/v1/navigation/route', ORCA_ROUTE)
   assert.equal(res.status, 200, 'answered while the read is still outstanding')
   assert.equal(c.written.length, 0, 'and nothing written yet')
   release({})
@@ -265,10 +287,11 @@ test('a route queued when the plugin stops is not written afterwards', async () 
   const realList = c.app.resourcesApi.listResources
   c.app.resourcesApi.listResources = () => new Promise(r => { release = () => r({}) })
   const api = new Api(c)
-  const apps = []
-  api._listen = (a) => { apps.push(a); return { close () {} } }
+  const servers = []
+  const realListen = api._listen.bind(api)
+  api._listen = (a) => { const srv = realListen(a, 0); servers.push(srv); return srv }
   api.start()
-  await request(apps[0], 'PUT', '/v1/navigation/route', ORCA_ROUTE)
+  await request(servers[0], 'PUT', '/v1/navigation/route', ORCA_ROUTE)
   api.stop()
   c.app.resourcesApi.listResources = realList
   release()
@@ -361,29 +384,13 @@ test('a body carrying no route is treated as cancelled, not published', async ()
   assert.equal(c.written.length, 0)
 })
 
-// The request() helper above calls the express app directly and hands it a
-// body object, bypassing express.json() entirely — so it can't catch a body
-// parser regression. This drives a real socket instead: express 5's
-// body-parser leaves req.body undefined (not {}) for a request with no
-// body, which broke every route that read req.body without a fallback.
-test('a PUT with no body at all does not 500 (real body-parser, not mocked)', async () => {
-  const c = ctx()
-  const api = new Api(c)
-  api.start()
-  try {
-    const srv = api._servers.find(s => s.address()?.port)
-    const port = srv.address().port
-    const res = await new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port, method: 'PUT', path: '/v1/unmatched-path' }, (r) => {
-        let body = ''
-        r.on('data', d => { body += d })
-        r.on('end', () => resolve({ status: r.statusCode, body }))
-      })
-      req.on('error', reject)
-      req.end()
-    })
-    assert.equal(res.status, 200)
-  } finally {
-    api.stop()
-  }
+// express 5's body-parser leaves req.body undefined (not {}) for a request with no body at all,
+// which broke every route that read req.body without a fallback (the catch-all logger, and the
+// radar command forwarders in lib/radar.js). request(..., undefined) sends no body/no
+// Content-Type, same as a bare PUT — that gap only shows up over a real socket, which is the
+// point of apiUnderTest() binding a real port instead of calling the express app directly.
+test('a PUT with no body at all does not 500', async () => {
+  const { rest } = apiUnderTest()
+  const res = await request(rest, 'PUT', '/v1/unmatched-path')
+  assert.equal(res.status, 200)
 })
