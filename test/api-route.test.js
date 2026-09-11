@@ -5,6 +5,7 @@ process.env.TZ = 'Europe/Stockholm'
 
 const test   = require('node:test')
 const assert = require('node:assert/strict')
+const http   = require('node:http')
 const Api    = require('../lib/api')
 
 // route.test.js covers the conversion. This covers the wiring: that the app's PUT reaches a
@@ -358,4 +359,31 @@ test('a body carrying no route is treated as cancelled, not published', async ()
   await settled()
   assert.equal(res.status, 200)
   assert.equal(c.written.length, 0)
+})
+
+// The request() helper above calls the express app directly and hands it a
+// body object, bypassing express.json() entirely — so it can't catch a body
+// parser regression. This drives a real socket instead: express 5's
+// body-parser leaves req.body undefined (not {}) for a request with no
+// body, which broke every route that read req.body without a fallback.
+test('a PUT with no body at all does not 500 (real body-parser, not mocked)', async () => {
+  const c = ctx()
+  const api = new Api(c)
+  api.start()
+  try {
+    const srv = api._servers.find(s => s.address()?.port)
+    const port = srv.address().port
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port, method: 'PUT', path: '/v1/unmatched-path' }, (r) => {
+        let body = ''
+        r.on('data', d => { body += d })
+        r.on('end', () => resolve({ status: r.statusCode, body }))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    assert.equal(res.status, 200)
+  } finally {
+    api.stop()
+  }
 })
