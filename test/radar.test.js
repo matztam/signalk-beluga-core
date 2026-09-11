@@ -2,7 +2,9 @@
 
 const test   = require('node:test')
 const assert = require('node:assert/strict')
-const { parseRadarList } = require('../lib/radar')
+const http   = require('node:http')
+const Radar  = require('../lib/radar')
+const { parseRadarList } = Radar
 
 // Radar API v3.4.0 moved the radar map behind a `{ version, radars }` envelope.
 // Parsing it as a bare map is the failure this covers: it does not yield an
@@ -53,8 +55,6 @@ test('array entries without an id are skipped', () => {
 // ── ORCA status payload ─────────────────────────────────────────────────────
 // The app's sliders read these. They used to be hardcoded (gain 50/auto, sea 0,
 // rain 0) regardless of what the radar was actually set to.
-
-const Radar = require('../lib/radar')
 
 function statusFor (radar) {
   return Radar.prototype._orcaStatus.call(null, radar)
@@ -268,5 +268,39 @@ test('the spoke stream to mayara follows the app clients', async () => {
   } finally {
     radar.stop()
     upstream.close()
+  }
+})
+
+// The REST server binds a fixed port (9081), unlike lib/api.js's, so a direct HTTP request is the
+// only way to reach it — a request built by hand and handed to the express app directly, as this
+// suite otherwise does, would skip the real body-parser and miss exactly this: express 5's
+// body-parser leaves req.body undefined (not {}) for a request with no body, which _forwardCommand
+// read unconditionally and crashed on.
+test('PUT /v1/radars/:id/command with no body does not 500', async () => {
+  const radar = new Radar({
+    app: { debug () {}, setPluginError () {}, setPluginStatus () {} },
+    mayaraHost: '127.0.0.1',
+    mayaraPort: 1, // nothing there; _forwardCommand's fetch fails in the background, not our concern here
+  })
+  radar._startStatePoll = () => {}
+  radar.start()
+  radar._connect({ id: 'r1', name: 'Test', spokesPerRevolution: 2048, maxSpokeLen: 512 })
+
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port: 9081, method: 'PUT', path: '/v1/radars/r1/command', headers: { Connection: 'close' } },
+        (r) => {
+          let body = ''
+          r.on('data', d => { body += d })
+          r.on('end', () => resolve({ status: r.statusCode, body }))
+        }
+      )
+      req.on('error', reject)
+      req.end()
+    })
+    assert.equal(res.status, 200)
+  } finally {
+    radar.stop()
   }
 })
